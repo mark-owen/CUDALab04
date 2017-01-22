@@ -13,7 +13,7 @@
 
 #define NUM_RECORDS 32768
 #define THREADS_PER_BLOCK 256
-#define NUMBER_LOOPS 1
+#define NUMBER_LOOPS 100
 
 
 
@@ -34,9 +34,11 @@ __global__ void maximumMark_CUDA_kernel(float *d_marks, float *d_reduced_marks) 
 	
 	for (unsigned int stride = blockDim.x / 2; stride > 0; stride >>= 1){
 		//Exercise 1.1) reduce two values per loop and write these back to shared memory
-		//ToDo
-		
-		
+		if (threadIdx.x < stride){
+			if (sdata[threadIdx.x] < sdata[threadIdx.x + stride]){
+				sdata[threadIdx.x] = sdata[threadIdx.x + stride];
+			}
+		}
 		//sync threads required to ensure all threads have finished writing
 		__syncthreads();
 	}
@@ -200,7 +202,16 @@ void maximumMark_CUDA(float *h_marks, float *h_marks_temp){
 
 	//Exercise 1.2) copy result of block level reduction back to host and reduce these values serially
 	max_mark = 0;
-	//ToDo
+	cudaMemcpy(h_marks_temp, d_marks_temp, sizeof(float)*blocksPerGrid.x, cudaMemcpyDeviceToHost);
+	checkCUDAError("CUDA: CUDA memcpy back");
+
+	//iterate marks on CPU and record highest mark and student id
+	for (i = 0; i < blocksPerGrid.x; i++){
+		float mark = h_marks_temp[i];
+		if (mark > max_mark){
+			max_mark = mark;
+		}
+	}
 
 
 	//output result
@@ -225,40 +236,53 @@ void maximumMark_Thrust(float *h_marks){
 	float max_mark;
 
 	//Exercise 1.3.1) create a thrust vector
+	thrust::device_vector<float> d_marks(h_marks, h_marks+NUM_RECORDS);
 
 	//Exercise 1.3.2) reduction using max operator
+	max_mark = thrust::reduce(d_marks.begin(), d_marks.end(), (float)0, my_maximum());
+	//max_mark = thrust::reduce(d_marks.begin(), d_marks.end(), (float)0, thrust::maximum<float>());
 
 	printf("Thrust: Highest mark recorded %f\n", max_mark);
 
 }
 
-
+struct greater_than_90
+{
+	__host__ __device__ bool operator()(float x)
+	{
+		return x > 90.0f;
+	}
+};
 
 //Exercise 2.1
 int sortSplit_Thrust(float *h_marks){
 	thrust::device_vector<float>::iterator iter;
 
 	// Exercise 2.1.1)
-
+	thrust::device_vector<float> d_marks(h_marks, h_marks + NUM_RECORDS);
+	
 	//Exercise 2.1.2) sort the marks
+	thrust::sort(d_marks.begin(), d_marks.end());
 
 	//Exercise 2.1.3) find if greater than 90%
+	iter = thrust::find_if(d_marks.begin(), d_marks.end(), greater_than_90());
 
 	//Exercise 2.1.4) find index of first 90% mark
-	return 0;
+	return NUM_RECORDS - thrust::distance(d_marks.begin(), iter);
 
 }
 
 //Exercise 2.2)
 int partition_Thrust(float * h_marks){
-	thrust::device_vector<float>::iterator iter;
-		
 	//create a thrust vector
+	thrust::device_vector<float> d_marks(h_marks, h_marks + NUM_RECORDS);
 
 	//use a partition to apply a prefix sum and re-order
+	thrust::device_vector<float>::iterator iter;
+	iter = thrust::partition(d_marks.begin(), d_marks.end(), greater_than_90());
 
 	//find index of first 90% mark
-	return 0;
+	return thrust::distance(d_marks.begin(), iter);
 
 }
 
