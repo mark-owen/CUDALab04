@@ -14,8 +14,6 @@
 
 #define NUM_RECORDS 32768
 #define THREADS_PER_BLOCK 256
-//#define NUM_RECORDS 32
-//#define THREADS_PER_BLOCK 8
 #define NUMBER_LOOPS 1
 
 
@@ -284,11 +282,15 @@ int partition_Thrust(float * h_marks){
 	thrust::device_vector<float>::iterator iter;
 		
 	//create a thrust vector
+	thrust::device_vector<float> d_marks(h_marks, h_marks+NUM_RECORDS);
 
 	//use a partition to apply a prefix sum and re-order
+	iter = thrust::partition(d_marks.begin(), d_marks.end(), greaterNinety());
 
 	//find index of first 90% mark
-	return 0;
+	unsigned int index = thrust::distance(d_marks.begin(), iter);
+
+	return index;
 
 }
 
