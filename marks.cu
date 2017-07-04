@@ -171,7 +171,7 @@ void calculate_CPU(float *h_marks){
 	}
 
 	//output result
-	printf("CPU: Highest mark recorded %f there are %d marks greater 90%\n", max_mark, count);
+	printf("CPU: Highest mark recorded %f there are %d marks greater 90%%\n", max_mark, count);
 }
 
 void maximumMark_CUDA(float *h_marks, float *h_marks_temp){
