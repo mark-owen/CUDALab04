@@ -1,3 +1,4 @@
+// -*-c-*-
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -13,6 +14,8 @@
 
 #define NUM_RECORDS 32768
 #define THREADS_PER_BLOCK 256
+//#define NUM_RECORDS 32
+//#define THREADS_PER_BLOCK 8
 #define NUMBER_LOOPS 1
 
 
@@ -20,32 +23,38 @@
 
 //Exercise 1) CUDA Parallel reduction
 __global__ void maximumMark_CUDA_kernel(float *d_marks, float *d_reduced_marks) {
-	int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  const int tx = threadIdx.x;
+  int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  __shared__ float sdata[THREADS_PER_BLOCK];
+  
+  //Load a single student mark
+  sdata[tx] = d_marks[idx];
+  
+  //sync threads required to ensure all threads have finished writing
+  __syncthreads();
+  
+  for (unsigned int stride = blockDim.x / 2; stride > 0; stride >>= 1){
+    //Exercise 1.1) reduce two values per loop and write these back to shared memory	  
+    
+    
+    // for each loop stride gives us the gap between the elements we want to read
+    if( tx < stride) { // only do this for the number of threads needed
+      float data0 = sdata[tx];
+      float data1 = sdata[tx+stride];
+      //printf("Stride %d tx %d data0 %f data1 %f\n", stride, tx, data0, data1);
 
-	__shared__ float sdata[THREADS_PER_BLOCK];
-
-	//Load a single student mark
-	sdata[threadIdx.x] = d_marks[idx];
-
-	//sync threads required to ensure all threads have finished writing
-	__syncthreads();
-
-
-	
-	for (unsigned int stride = blockDim.x / 2; stride > 0; stride >>= 1){
-		//Exercise 1.1) reduce two values per loop and write these back to shared memory
-		//ToDo
-		
-		
-		//sync threads required to ensure all threads have finished writing
-		__syncthreads();
-	}
-
-
-	//Write the result to shared memory
-	if (threadIdx.x == 0){
-		d_reduced_marks[blockIdx.x] = sdata[0];
-	}
+      if(data0 > data1) sdata[tx] = data0;
+      else sdata[tx] = data1;
+    }  
+    //sync threads required to ensure all threads have finished writing
+    __syncthreads();
+  }
+  
+  
+  //Write the result to shared memory
+  if (threadIdx.x == 0){
+    d_reduced_marks[blockIdx.x] = sdata[0];
+  }
 }
 
 void checkCUDAError(const char*);
@@ -200,8 +209,12 @@ void maximumMark_CUDA(float *h_marks, float *h_marks_temp){
 
 	//Exercise 1.2) copy result of block level reduction back to host and reduce these values serially
 	max_mark = 0;
-	//ToDo
-
+	// since we did the reduction at block level, we only need to get back an array with size of the number of blocks we have
+	cudaMemcpy(h_marks_temp, d_marks_temp, sizeof(float)*blocksPerGrid.x,cudaMemcpyDeviceToHost);
+	// final part is to find the highest value from the per-block values
+	for(i=0; i<blocksPerGrid.x; ++i) {
+	  if(h_marks_temp[i] > max_mark) max_mark = h_marks_temp[i];
+	}
 
 	//output result
 	printf("CUDA: Highest mark recorded %f\n", max_mark);
@@ -224,9 +237,11 @@ struct my_maximum
 void maximumMark_Thrust(float *h_marks){
 	float max_mark;
 
-	//Exercise 1.3.1) create a thrust vector
+	//Exercise 1.3.1) create a thrust vector by copying from host array
+	thrust::device_vector<float> d_marks(h_marks, h_marks+NUM_RECORDS);
 
 	//Exercise 1.3.2) reduction using max operator
+	max_mark = thrust::reduce( d_marks.begin(), d_marks.end(), 0.0, thrust::maximum<float>());
 
 	printf("Thrust: Highest mark recorded %f\n", max_mark);
 
