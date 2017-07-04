@@ -233,6 +233,15 @@ struct my_maximum
 	}
 };
 
+struct greaterNinety
+{
+  __host__ __device__ bool operator()(const float x) 
+  {
+    //printf("compare %f with 90.0\n",x);
+    return x > 90.0;
+  }
+};
+  
 //Exercise 1.3)
 void maximumMark_Thrust(float *h_marks){
 	float max_mark;
@@ -254,13 +263,19 @@ int sortSplit_Thrust(float *h_marks){
 	thrust::device_vector<float>::iterator iter;
 
 	// Exercise 2.1.1)
+	// put marks in thrust vector on the device
+	thrust::device_vector<float> d_marks(h_marks, h_marks+NUM_RECORDS);
 
 	//Exercise 2.1.2) sort the marks
+	thrust::sort(d_marks.begin(), d_marks.end());
 
 	//Exercise 2.1.3) find if greater than 90%
+	iter = thrust::find_if(d_marks.begin(), d_marks.end(), greaterNinety());
 
 	//Exercise 2.1.4) find index of first 90% mark
-	return 0;
+	unsigned int index = thrust::distance(d_marks.begin(), iter);
+
+	return NUM_RECORDS-index;
 
 }
 
